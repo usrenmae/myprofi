@@ -1,17 +1,42 @@
 <?php
 class extractor
 {
+	/**
+	 * Size of a chunk of file to preread into memory
+	 *
+	 */
 	const CHUNK_SIZE = 10240; // bytes
 
+	/**
+	 * Open file pointer
+	 *
+	 * @var resource
+	 */
 	protected $fp;
 
+	/**
+	 * Current chunk of file to read
+	 *
+	 * @var string
+	 */
 	protected $cur_chunk;
 
+	/**
+	 * Initialize extractor object
+	 *
+	 * @param resource $fp - file pointer
+	 */
 	public function __construct($fp)
 	{
 		$this->fp = $fp;
 	}
 
+	/**
+	 * Preread chunk of file into memory
+	 * not to fetch lines from hdd each read
+	 *
+	 * @return boolean
+	 */
 	protected function read_chunk()
 	{
 		if (feof($this->fp))
@@ -23,6 +48,11 @@ class extractor
 		return true;
 	}
 
+	/**
+	 * Get next line from stream (until \n symbol)
+	 *
+	 * @return string
+	 */
 	public function get_line()
 	{
 		while (false === ($pos = strpos($this->cur_chunk,"\n")))
@@ -39,6 +69,11 @@ class extractor
 		return $line ;
 	}
 
+	/**
+	 * Fetch the next query pattern from stream
+	 *
+	 * @return string
+	 */
 	public function get_query()
 	{
 		static $newline;
@@ -104,6 +139,12 @@ class extractor
 		return ($return === '' ? false : ($r === '' ? true : $r));
 	}
 
+	/**
+	 * Normalize query: remove variable data and replace it with {}
+	 *
+	 * @param string $q
+	 * @return string
+	 */
 	protected static function normalize($q)
 	{
 		$query = $q;
@@ -119,7 +160,7 @@ class extractor
 	}
 }
 
-$file = isset($argv[1]) ? $argv[1] : 'c:\\atari.log' ;
+$file = isset($argv[1]) ? $argv[1] : 'zqueries.log' ;
 if (false == ($fp = fopen($file, "rb")))
 {
 	die('cannot open file');
@@ -157,7 +198,6 @@ while(($line = $ex->get_query()))
 		$nums[$hash]++;
 	}
 	$i++;
-	//echo memory_get_usage(),"\n";
 }
 arsort($nums);
 arsort($types);
