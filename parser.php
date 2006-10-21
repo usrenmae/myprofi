@@ -1,4 +1,29 @@
 <?php
+
+/**
+ * MyProfi is mysql profiler and anlyzer, which outputs statistics of mostly
+ * used queries by reading query log file.
+ *
+ * Copyright (C) 2006 camka@sf.net
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * @author camka
+ * @package MyProfi
+ */
+
+/**
+ * Extracts normalized queries from mysql query log one by one
+ *
+ */
 class extractor
 {
 	/**
@@ -97,7 +122,7 @@ class extractor
 			}
 
 			$matches = array();
-			if(preg_match("/^(?:\d{6} {1,2}\d{1,2}:\d{2}:\d{2}|\t)\t +\d+ (\w+)/", $line, $matches))
+			if(preg_match("/^(?:\\d{6} {1,2}\\d{1,2}:\\d{2}:\\d{2}|\t)\t +\\d+ (\w+)/", $line, $matches))
 			{
 				// if log line
 				$type = $matches[1];
@@ -150,19 +175,27 @@ class extractor
 	protected static function normalize($q)
 	{
 		$query = $q;
-		$query = preg_replace("/\/\*.*\*\//sU", '', $query);				// remove multiline comments
+		$query = preg_replace("/\\/\\*.*\\*\\//sU", '', $query);				// remove multiline comments
 		$query = preg_replace("/([\"'])(?:\\\\.|\\1\\1|.)*\\1/sU", "{}", $query);	// remove quoted strings
-		$query = preg_replace("/(\W)(\d+)/", "\\1{}", $query);				// remove numbers
-		$query = preg_replace("/\s+/", ' ', $query);					// remove multiple spaces
-		$query = preg_replace("/ (\W)/","\\1", $query);					// remove spaces bordering with non-characters
-		$query = preg_replace("/(\W) /","\\1", $query);					// --,--
+		$query = preg_replace("/(\\W)(\\d+)/", "\\1{}", $query);				// remove numbers
+		$query = preg_replace("/\\s+/", ' ', $query);					// remove multiple spaces
+		$query = preg_replace("/ (\\W)/","\\1", $query);					// remove spaces bordering with non-characters
+		$query = preg_replace("/(\\W) /","\\1", $query);					// --,--
 		$query = preg_replace("/\\{\\}(,\\{\\})+/", "{}", $query);
 		$query = trim(strtolower($query)," \t\n");					// trim spaces and strolower
 		return $query;
 	}
 }
 
-$file = isset($argv[1]) ? $argv[1] : 'zqueries.log' ;
+if (isset($argv[1]))
+	$file = $argv[1];
+else
+{
+	echo "usage: ",
+		"php parser.php inputfile.log>outputfile.txt\n";
+	exit;
+}
+
 if (false == ($fp = fopen($file, "rb")))
 {
 	die('cannot open file');
@@ -175,21 +208,21 @@ $queries = array();
 $nums = array();
 $types = array();
 
+// group queries by type and pattern
 while(($line = $ex->get_query()))
 {
+	// extract first word to determine query type
 	$t = preg_split("/[^a-z]/", $line, 2);
 	$type = $t[0];
 	$hash = md5($line);
 
+	// calculate query by type
 	if (!array_key_exists($type, $types))
-	{
 		$types[$type] = 1;
-	}
 	else
-	{
 		$types[$type]++;
-	}
 
+	// calculate query by pattern
 	if (!array_key_exists($hash, $queries))
 	{
 		$queries[$hash] = $line;
@@ -214,7 +247,6 @@ printf("Queries by pattern:\n===================\n");
 foreach($nums as $hash => $num)
 {
 	printf("%d.\t% -10s [% 5s%%] - %s\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $queries[$hash]);
-	// if($j>50) break;
 }
 printf("---------------\nTotal: ".number_format(--$j, 0, '', ' ')." patterns");
 ?>
