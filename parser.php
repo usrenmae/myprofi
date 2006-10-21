@@ -4,7 +4,7 @@
  * MyProfi is mysql profiler and anlyzer, which outputs statistics of mostly
  * used queries by reading query log file.
  *
- * Copyright (C) 2006 camka@sf.net
+ * Copyright (C) 2006 camka at camka@users.sourceforge.net
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
