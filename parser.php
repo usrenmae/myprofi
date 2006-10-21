@@ -55,6 +55,8 @@ class extractor
 	 */
 	public function get_line()
 	{
+		// searching for the next end of line
+		// if not found till the end of file, return the rest of cur_chunk left
 		while (false === ($pos = strpos($this->cur_chunk,"\n")))
 		{
 			if (!$this->read_chunk())
@@ -86,6 +88,7 @@ class extractor
 			$line = rtrim($line,"\n");
 			$cll = strlen($line);
 
+			// skip server start log lines
 			if (strpos($line, "started with:") === ($cll - 13))
 			{
 				$this->get_line(); // skip TCP Port: 3306, Named Pipe: (null)
@@ -135,8 +138,7 @@ class extractor
 			}
 		}
 
-		$r = self::normalize($return);
-		return ($return === '' ? false : ($r === '' ? true : $r));
+		return ($return === '' || is_null($return)? false : ('' === ($r = self::normalize($return)) ? true : $r));
 	}
 
 	/**
