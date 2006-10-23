@@ -1,0 +1,104 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>MyProfi - mysql log profiler and analyzer</title>
+<style type="text/css">
+<!--
+html * {
+	font-family: "Lucida Sans Unicode";
+}
+
+.sql {
+	font-family: "Courier New", Courier, monospace;
+	background-color: #efefef;
+	padding-left: 5px;
+	padding-right: 5px;
+}
+
+ul {
+	list-style:square;
+}
+
+#menu {
+	float: right;
+	width: 200px;
+}
+
+#doc {
+	width: 700px;
+	text-align: justify;
+	margin: 10px;
+	padding: 5px;
+}
+
+#doc p {
+	
+}
+-->
+</style>
+</head>
+<body>
+	<div id="header">
+		<h1>MyProfi</h1>
+		<p>MySQL log profiler and analyzer</p>
+	</div>
+	
+	<ul id="menu">
+		<li><a href="#whatis">What is</a></li>
+		<li><a href="#whatfor">What for</a></li>
+		<li><a href="#whythis">Why this</a></li>
+		<li><a href="#howto">How to</a></li>
+		<li><a href="#whatneeds">What needs</a></li>
+		<li><a href="#todo">To do</a></li>
+		<li><a href="#knownbugs">Known bugs</a></li>
+	</ul>
+
+	<div id="doc">
+		<h2 id="whatis">What is</h2>
+		<p>MyProfi is a command line tool that parses mysql query log and outputs statistics of most frequently used queries, sorting them by number of times they appear in a log file. The similar queries are groupped together. Thus, <span class="sql">select id from user where login=&quot;admin&quot;</span> and <span class="sql">select id from user where login='root'</span> become <span class="sql">select id from user where login={}</span> - the variable parts of queries are replaced with <b>{}</b> markers, this make statistics analysis as easy as revewing the top of most frequently occured queries' patterns.
+		<h3>Sample output:</h3>
+			<pre>
+				
+			</pre>
+		</p>
+		<h2 id="whatfor">What for</h2>
+		<p>When developing an application one can hardly predict, which of the sql queries will run the most often, and which less often. The most popular queries are to be the first candidates for optimisation, fine tuning and polishing. By optimizing the most frequenly run queries the developer may achieve significant performance gain for overall system. Reviwing the statistics of MyProfi output it's becomes too easy to extract those queries to start optimizing db by adding indexes, reconsidering database structure, etc.</p>
+		<h2 id="whythis">Why this</h2>
+		<p>MyProfi has the features, which makes it the unique piece of software of a kind. </p>
+		<ul>
+			<li>Makes analysis by query patterns, removing useless variable data from queries, like single- or multiline comments, string and numeric values (considering all possible escaping technique), unsignificant whitespaces, repeated variable data, like <span class="sql">in (12, 32, 32)</span> becomes <span class="sql">in ({})</span></li>
+			<li>Performes streaming parsing, so even too big query log analyzing won't take much memory on your machine</li>
+			<li>Recognizes prepared statements</li>
+			<li>Output also query type statistics, i.e. select, delete, update, etc</li>
+			<li>Won't be confused by incorrect mysql queries</li>
+		</ul>
+		</p>
+		<h2 id="howto">How to</h2>
+		<p>Just run it in command line using php cli version, pointing it to your mysql query log file: <span class="cli">$ php mysql.log &gt; outfile.txt</span> </p>
+		<h2 id="whatneeds">What needs</h2>
+		<p>
+			<ul>
+				<li>PHP 5.x (sorry for all you oldschool PHP 4 lovers)</li>
+				<li>Any platform that supports php command line version running on it</li>
+			</ul>
+		</p>
+		<h2 id="todo">To do</h2>
+		<p>
+			<ul>
+				<li>Make additional command line options for setting the number of top queries to show, maximum size of file to be parsed</li>
+				<li>Output table/database based statistics</li>
+				<li>Analyze slow query log to view query execution time</li>
+				<li>Port to C/C++ for faster performance (utopia)</li>
+			</ul>
+		</p>
+		<h2 id="knownbugs">Known bugs</h2>
+		<p>
+		<ul>
+			<li>Crashes with certain very long queries if php 5.1.6 is used (maybe older versions as well)</li>
+			<li>Not maximum fast, as using many regular expression based replacements</li>
+		</ul>
+		</p>
+	</div>
+</body>
+</html>
