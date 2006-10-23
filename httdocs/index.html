@@ -9,6 +9,10 @@ html * {
 	font-family: "Lucida Sans Unicode";
 }
 
+body {
+	font-size: 0.8em;
+}
+
 .sql {
 	font-family: "Courier New", Courier, monospace;
 	background-color: #efefef;
@@ -23,6 +27,8 @@ ul {
 #menu {
 	float: right;
 	width: 200px;
+	position: fixed;
+	right: 20px;
 }
 
 #doc {
@@ -32,8 +38,13 @@ ul {
 	padding: 5px;
 }
 
-#doc p {
-	
+#doc h2:target {
+	text-decoration: underline;
+}
+
+pre {
+	font-size: 10px;
+	overflow: auto;
 }
 -->
 </style>
@@ -58,10 +69,66 @@ ul {
 		<h2 id="whatis">What is</h2>
 		<p>MyProfi is a command line tool that parses mysql query log and outputs statistics of most frequently used queries, sorting them by number of times they appear in a log file. The similar queries are groupped together. Thus, <span class="sql">select id from user where login=&quot;admin&quot;</span> and <span class="sql">select id from user where login='root'</span> become <span class="sql">select id from user where login={}</span> - the variable parts of queries are replaced with <b>{}</b> markers, this make statistics analysis as easy as revewing the top of most frequently occured queries' patterns.
 		<h3>Sample output:</h3>
-			<pre>
-				
+			<pre class="sql">Queries by type:
+================
+select               10 658     [56.43%] 
+set                  4 821      [25.53%] 
+update               1 586      [ 8.40%] 
+show                 531        [ 2.81%] 
+insert               474        [ 2.51%] 
+delete               271        [ 1.43%] 
+create               213        [ 1.13%] 
+drop                 92         [ 0.49%] 
+unlock               50         [ 0.26%] 
+lock                 50         [ 0.26%] 
+replace              26         [ 0.14%] 
+flush                4          [ 0.02%] 
+desc                 4          [ 0.02%] 
+use                  2          [ 0.01%] 
+explain              2          [ 0.01%] 
+grant                2          [ 0.01%] 
+commit               1          [ 0.01%] 
+truncate             1          [ 0.01%] 
+...
+---------------
+Total: 18 886 queries
+
+
+Queries by pattern:
+===================
+1.	4 790      [25.36%] - set names utf8
+2.	3 731      [19.76%] - select id from projects where md5(id)={}
+3.	1 373      [ 7.27%] - update dcdb_session set last_access_time=now()where profile_id={}and sid={}
+4.	208        [ 1.10%] - select data,created,headers from cache where cid={}
+5.	172        [ 0.91%] - insert into system(name,description,type,filename,status,throttle,bootstrap)values({})
+6.	144        [ 0.76%] - select*from blocks where status={}and region in({})order by weight,module
+7.	128        [ 0.68%] - delete from system where name={}and type={}
+8.	124        [ 0.66%] - select r.rid,r.name from role r inner join users_roles ur on ur.rid=r.rid where ur.uid={}
+9.	108        [ 0.57%] - show table status like{}
+10.	104        [ 0.55%] - select id from profiles where project={}and login={}
+11.	91         [ 0.48%] - select u.*,s.*from users u inner join sessions s on u.uid=s.uid where s.sid={}and u.status&lt;{}limit{}
+12.	91         [ 0.48%] - select*from url_alias
+13.	91         [ 0.48%] - select name,filename,throttle,bootstrap from system where type={}and status={}
+14.	91         [ 0.48%] - update sessions set uid={},hostname={},session={},timestamp={}where sid={}
+15.	87         [ 0.46%] - select*from system where type={}order by name
+16.	76         [ 0.40%] - update system set status={},throttle={}where type={}and name={}
+17.	66         [ 0.35%] - select id,login,group_permissions from user where delfi_profile_id={}
+18.	53         [ 0.28%] - select id from profiles where id={}and password={}and project={}
+19.	50         [ 0.26%] - unlock tables
+20.	50         [ 0.26%] - select id,title,access_level from album where id={}and user_id={}
+21.	49         [ 0.26%] - insert into blocks(module,delta,status,weight,region,visibility,pages,custom,throttle,types)values({})
+22.	49         [ 0.26%] - select id,name from category order by sort_order
+23.	44         [ 0.23%] - delete from dcdb_session where sid={}
+24.	42         [ 0.22%] - select id from profiles where id={}and password=md5({})and project={}
+25.	40         [ 0.21%] - select id,title from album where user_id={}and id&lt;&qt;{}
+26.	38         [ 0.20%] - select sum(if(id&lt;{}))as num_before,sum(if(id&qt;{}))as num_after,count(*)as num from image where album_id={}
+27.	38         [ 0.20%] - select id,salt from image where album_id={}order by id limit{}
+28.	34         [ 0.18%] - select sum(i.size)from image i inner join album a on i.album_id=a.id where a.user_id={}
+...
+---------------
+Total: 1 093 patterns
 			</pre>
-		</p>
+			</p>
 		<h2 id="whatfor">What for</h2>
 		<p>When developing an application one can hardly predict, which of the sql queries will run the most often, and which less often. The most popular queries are to be the first candidates for optimisation, fine tuning and polishing. By optimizing the most frequenly run queries the developer may achieve significant performance gain for overall system. Reviwing the statistics of MyProfi output it's becomes too easy to extract those queries to start optimizing db by adding indexes, reconsidering database structure, etc.</p>
 		<h2 id="whythis">Why this</h2>
@@ -78,19 +145,19 @@ ul {
 		<p>Just run it in command line using php cli version, pointing it to your mysql query log file: <span class="cli">$ php mysql.log &gt; outfile.txt</span> </p>
 		<h2 id="whatneeds">What needs</h2>
 		<p>
-			<ul>
-				<li>PHP 5.x (sorry for all you oldschool PHP 4 lovers)</li>
+		<ul>
+			<li>PHP 5.x (sorry for all you oldschool PHP 4 lovers)</li>
 				<li>Any platform that supports php command line version running on it</li>
 			</ul>
 		</p>
 		<h2 id="todo">To do</h2>
 		<p>
-			<ul>
+		<ul>
 				<li>Make additional command line options for setting the number of top queries to show, maximum size of file to be parsed</li>
 				<li>Output table/database based statistics</li>
 				<li>Analyze slow query log to view query execution time</li>
 				<li>Port to C/C++ for faster performance (utopia)</li>
-			</ul>
+		</ul>
 		</p>
 		<h2 id="knownbugs">Known bugs</h2>
 		<p>
