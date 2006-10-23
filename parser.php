@@ -191,8 +191,9 @@ if (isset($argv[1]))
 	$file = $argv[1];
 else
 {
-	echo "usage: ",
-		"php parser.php inputfile.log>outputfile.txt\n";
+	echo "MyProfi: mysql log profiler and analyzer\n", 
+		"usage: ",
+		"php parser.php [inputfile][>outputfile]\n";
 	exit;
 }
 
