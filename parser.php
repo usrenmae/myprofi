@@ -20,6 +20,27 @@
  * @package MyProfi
  */
 
+
+/**
+ * Normalize query: remove variable data and replace it with {}
+ *
+ * @param string $q
+ * @return string
+ */
+function normalize($q)
+{
+	$query = $q;
+	$query = preg_replace("/\\/\\*.*\\*\\//sU", '', $query);				// remove multiline comments
+	$query = preg_replace("/([\"'])(?:\\\\.|\\1\\1|.)*\\1/sU", "{}", $query);	// remove quoted strings
+	$query = preg_replace("/(\\W)(\\d+)/", "\\1{}", $query);				// remove numbers
+	$query = preg_replace("/\\s+/", ' ', $query);					// remove multiple spaces
+	$query = preg_replace("/ (\\W)/","\\1", $query);					// remove spaces bordering with non-characters
+	$query = preg_replace("/(\\W) /","\\1", $query);					// --,--
+	$query = preg_replace("/\\{\\}(,\\{\\})+/", "{}", $query);
+	$query = trim(strtolower($query)," \t\n");					// trim spaces and strolower
+	return $query;
+}
+
 /**
  * Extracts normalized queries from mysql query log one by one
  *
@@ -30,7 +51,7 @@ class extractor
 	 * Size of a chunk of file to preread into memory
 	 *
 	 */
-	const CHUNK_SIZE = 10240; // bytes
+	const CHUNK_SIZE = 102400; // bytes
 
 	/**
 	 * Open file pointer
@@ -163,27 +184,48 @@ class extractor
 			}
 		}
 
-		return ($return === '' || is_null($return)? false : ('' === ($r = self::normalize($return)) ? true : $r));
+		return ($return === '' || is_null($return)? false : ('' === ($r = normalize($return)) ? true : $r));
+	}
+}
+
+/**
+ * Read mysql query log in csv format (as of mysql 5.1 it by default)
+ *
+ */
+class csvreader
+{
+	/**
+	 * csv file pointer
+	 *
+	 * @var resource
+	 */
+	protected $fp = null;
+
+	/**
+	 * Initialize object
+	 *
+	 * @param unknown_type $fp
+	 */
+	public function __construct($fp)
+	{
+		$this->fp = $fp;
 	}
 
 	/**
-	 * Normalize query: remove variable data and replace it with {}
+	 * Fetch next query from csv file
 	 *
-	 * @param string $q
-	 * @return string
+	 * @return string - or FALSE on file end
 	 */
-	protected static function normalize($q)
+	public function get_query()
 	{
-		$query = $q;
-		$query = preg_replace("/\\/\\*.*\\*\\//sU", '', $query);				// remove multiline comments
-		$query = preg_replace("/([\"'])(?:\\\\.|\\1\\1|.)*\\1/sU", "{}", $query);	// remove quoted strings
-		$query = preg_replace("/(\\W)(\\d+)/", "\\1{}", $query);				// remove numbers
-		$query = preg_replace("/\\s+/", ' ', $query);					// remove multiple spaces
-		$query = preg_replace("/ (\\W)/","\\1", $query);					// remove spaces bordering with non-characters
-		$query = preg_replace("/(\\W) /","\\1", $query);					// --,--
-		$query = preg_replace("/\\{\\}(,\\{\\})+/", "{}", $query);
-		$query = trim(strtolower($query)," \t\n");					// trim spaces and strolower
-		return $query;
+		while (false !== ($data = fgetcsv($this->fp)))
+		{
+			if ((!isset($data[4])) || (($data[4] !== "Query") && ($data[4] !== "Execute")) || (!$data[5]))
+				continue;
+
+			return normalize(str_replace(array("\\\\",'\\"'), array("\\",'"'), $data[5]));
+		}
+		return false;
 	}
 }
 
@@ -191,18 +233,25 @@ if (isset($argv[1]))
 	$file = $argv[1];
 else
 {
-	echo "MyProfi: mysql log profiler and analyzer\n", 
+	echo "MyProfi: mysql log profiler and analyzer\n",
 		"usage: ",
-		"php parser.php [inputfile][>outputfile]\n";
+		"php parser.php INPUTFILE [>outputfile]\n\n",
+		"If file extension is .csv, then file is parsed as\n ",
+		"csv table file for query logging by default as of mysql 5.1\n ";
 	exit;
 }
 
 if (false == ($fp = fopen($file, "rb")))
 {
-	die('cannot open file');
+	die('Error: cannot open file');
 }
 
-$ex = new extractor($fp);
+if (strcasecmp(".csv", substr($file, -4) == 0))
+	$ex = new csvreader($fp);
+else
+	$ex = new extractor($fp);
+
+
 $i = 0;
 $j = 1;
 $queries = array();
