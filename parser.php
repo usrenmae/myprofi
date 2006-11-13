@@ -246,7 +246,7 @@ if (false == ($fp = fopen($file, "rb")))
 	die('Error: cannot open file');
 }
 
-if (strcasecmp(".csv", substr($file, -4) == 0))
+if (strcasecmp(".csv", substr($file, -4)) == 0)
 	$ex = new csvreader($fp);
 else
 	$ex = new extractor($fp);
