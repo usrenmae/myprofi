@@ -61,13 +61,6 @@ class extractor
 	protected $fp;
 
 	/**
-	 * Current chunk of file to read
-	 *
-	 * @var string
-	 */
-	protected $cur_chunk;
-
-	/**
 	 * Initialize extractor object
 	 *
 	 * @param resource $fp - file pointer
@@ -75,46 +68,6 @@ class extractor
 	public function __construct($fp)
 	{
 		$this->fp = $fp;
-	}
-
-	/**
-	 * Preread chunk of file into memory
-	 * not to fetch lines from hdd each read
-	 *
-	 * @return boolean
-	 */
-	protected function read_chunk()
-	{
-		if (feof($this->fp))
-		{
-			return false;
-		}
-
-		$this->cur_chunk .= fread($this->fp, self::CHUNK_SIZE);
-		return true;
-	}
-
-	/**
-	 * Get next line from stream (until \n symbol)
-	 *
-	 * @return string
-	 */
-	public function get_line()
-	{
-		// searching for the next end of line
-		// if not found till the end of file, return the rest of cur_chunk left
-		while (false === ($pos = strpos($this->cur_chunk,"\n")))
-		{
-			if (!$this->read_chunk())
-			{
-				$pos = strlen($this->cur_chunk)-1;
-				break;
-			}
-		}
-
-		$line = substr($this->cur_chunk, 0, $pos+1);
-		$this->cur_chunk = substr($this->cur_chunk, $pos+1);
-		return $line ;
 	}
 
 	/**
@@ -129,17 +82,18 @@ class extractor
 		$return = $newline;
 		$newline = null;
 
-		while(($line = $this->get_line()))
+		$fp = $this->fp;
+
+		while(($line = fgets($fp)))
 		{
 			$line = rtrim($line,"\n");
-			$cll = strlen($line);
 
 			// skip server start log lines
-			if (strpos($line, "started with:") === ($cll - 13))
+			if (substr($line, -13) == "started with:")
 			{
-				$this->get_line(); // skip TCP Port: 3306, Named Pipe: (null)
-				$this->get_line(); // skip Time                 Id Command    Argument
-				$line = $this->get_line();
+				fgets($fp); // skip TCP Port: 3306, Named Pipe: (null)
+				fgets($fp); // skip Time                 Id Command    Argument
+				$line = fgets($fp);
 			}
 
 			$matches = array();
@@ -152,12 +106,12 @@ class extractor
 					case 'Query':
 						if($return)
 						{
-							$newline = ltrim(substr($line, strpos($line, "Query") + 5)," \t");
+							$newline = ltrim(substr($line, strpos($line, "Q") + 5)," \t");
 							break 2;
 						}
 						else
 						{
-							$return = ltrim(substr($line, strpos($line, "Query") + 5)," \t");
+							$return = ltrim(substr($line, strpos($line, "Q") + 5)," \t");
 							break;
 						}
 					case 'Execute':
@@ -228,6 +182,7 @@ class csvreader
 		return false;
 	}
 }
+echo date("\nH:i:s\n");
 
 if (isset($argv[1]))
 	$file = $argv[1];
@@ -299,4 +254,5 @@ foreach($nums as $hash => $num)
 	printf("%d.\t% -10s [% 5s%%] - %s\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $queries[$hash]);
 }
 printf("---------------\nTotal: ".number_format(--$j, 0, '', ' ')." patterns");
+echo date("\nH:i:s");
 ?>
