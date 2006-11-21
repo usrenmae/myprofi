@@ -30,14 +30,15 @@
 function normalize($q)
 {
 	$query = $q;
-	$query = preg_replace("/\\/\\*.*\\*\\//sU", '', $query);				// remove multiline comments
-	$query = preg_replace("/([\"'])(?:\\\\.|\\1\\1|.)*\\1/sU", "{}", $query);	// remove quoted strings
-	$query = preg_replace("/(\\W)(\\d+)/", "\\1{}", $query);				// remove numbers
-	$query = preg_replace("/\\s+/", ' ', $query);					// remove multiple spaces
-	$query = preg_replace("/ (\\W)/","\\1", $query);					// remove spaces bordering with non-characters
-	$query = preg_replace("/(\\W) /","\\1", $query);					// --,--
-	$query = preg_replace("/\\{\\}(,\\{\\})+/", "{}", $query);
-	$query = trim(strtolower($query)," \t\n");					// trim spaces and strolower
+	$query = preg_replace("/\\/\\*.*\\*\\//sU", '', $query);                   // remove multiline comments
+	$query = preg_replace("/([\"'])(?:\\\\.|\\1\\1|.)*\\1/sU", "{}", $query);  // remove quoted strings
+	$query = preg_replace("/(\\W)(?:\\d+)/", "\\1{}", $query);				   // remove numbers
+	$query = preg_replace("/\\s+/", ' ', $query);                              // remove multiple spaces
+	$query = preg_replace("/ (\\W)/","\\1", $query);                           // remove spaces bordering with non-characters
+	$query = preg_replace("/(\\W) /","\\1", $query);                           // --,--
+	$query = preg_replace("/\\{\\}(?:,\\{\\})+/", "{}", $query);               // repetitive {},{} to single {}
+	$query = preg_replace("/\\(\\{\\}\\)(?:,\\(\\{\\}\\))+/", "({})", $query); // repetitive ({}),({}) to single ({})
+	$query = trim(strtolower($query)," \t\n");                                 // trim spaces and strolower
 	return $query;
 }
 
@@ -97,7 +98,7 @@ class extractor
 			}
 
 			$matches = array();
-			if(preg_match("/^(?:\\d{6} {1,2}\\d{1,2}:\\d{2}:\\d{2}|\t)\t +\\d+ (\w+)/", $line, $matches))
+			if(preg_match("/^(?:\\d{6} {1,2}\\d{1,2}:\\d{2}:\\d{2}|\t)\t +\\d+ (\\w+)/", $line, $matches))
 			{
 				// if log line
 				$type = $matches[1];
@@ -182,13 +183,12 @@ class csvreader
 		return false;
 	}
 }
-echo date("\nH:i:s\n");
 
-if (isset($argv[1]))
-	$file = $argv[1];
-else
+function doc($msg = null)
 {
-	echo "MyProfi: mysql log profiler and analyzer\n",
+	echo (!is_null($msg) ? ($msg."\n\n") : '').
+
+		"MyProfi: mysql log profiler and analyzer\n",
 		"usage: ",
 		"php parser.php INPUTFILE [>outputfile]\n\n",
 		"If file extension is .csv, then file is parsed as\n ",
@@ -196,16 +196,55 @@ else
 	exit;
 }
 
-if (false == ($fp = fopen($file, "rb")))
+echo date("\nH:i:s\n");
+
+if (isset($argv[1]))
+	$file = $argv[1];
+else
 {
-	die('Error: cannot open file');
+	$file = 'atari.log';
+	// doc();
+}
+
+$top  = null;
+$prefx = null;
+
+array_shift($argv); // 0
+array_shift($argv); // 1
+
+// getting command line options
+while(null !== ($com = array_shift($argv)))
+{
+	switch ($com)
+	{
+		case '-top':
+			if (is_null($top = array_shift($argv)))
+				doc('Error: must specify the number of top queries to output');
+
+			if (!($top = (int)$top))
+				doc('Error: top number must be integer value');
+
+			break;
+		case '-type':
+			if (is_null($prefx = array_shift($argv)))
+				doc('Error: must specify coma separated list of query types to output');
+			$prefx = explode(',', $prefx);
+			$prefx = array_map('trim', $prefx);
+			$prefx = array_map('strtolower', $prefx);
+			$prefx = array_flip($prefx);
+			break;
+	}
+}
+
+if (false === ($fp = fopen($file, "rb")))
+{
+	doc('Error: cannot open file');
 }
 
 if (strcasecmp(".csv", substr($file, -4)) == 0)
 	$ex = new csvreader($fp);
 else
 	$ex = new extractor($fp);
-
 
 $i = 0;
 $j = 1;
@@ -217,8 +256,12 @@ $types = array();
 while(($line = $ex->get_query()))
 {
 	// extract first word to determine query type
-	$t = preg_split("/[^a-z]/", $line, 2);
+	$t = preg_split("/[\\W]/", $line, 2);
 	$type = $t[0];
+
+	if (!is_null($prefx) && !isset($prefx[$type]))
+		continue;
+
 	$hash = md5($line);
 
 	// calculate query by type
@@ -241,6 +284,9 @@ while(($line = $ex->get_query()))
 }
 arsort($nums);
 arsort($types);
+
+if (!is_null($top))
+	$nums = array_slice($nums, 0, $top);
 
 printf("Queries by type:\n================\n");
 foreach($types as $type=>$num)
