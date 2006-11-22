@@ -30,15 +30,16 @@
 function normalize($q)
 {
 	$query = $q;
-	$query = preg_replace("/\\/\\*.*\\*\\//sU", '', $query);                   // remove multiline comments
-	$query = preg_replace("/([\"'])(?:\\\\.|\\1\\1|.)*\\1/sU", "{}", $query);  // remove quoted strings
-	$query = preg_replace("/(\\W)(?:\\d+)/", "\\1{}", $query);				   // remove numbers
-	$query = preg_replace("/\\s+/", ' ', $query);                              // remove multiple spaces
-	$query = preg_replace("/ (\\W)/","\\1", $query);                           // remove spaces bordering with non-characters
-	$query = preg_replace("/(\\W) /","\\1", $query);                           // --,--
-	$query = preg_replace("/\\{\\}(?:,\\{\\})+/", "{}", $query);               // repetitive {},{} to single {}
-	$query = preg_replace("/\\(\\{\\}\\)(?:,\\(\\{\\}\\))+/", "({})", $query); // repetitive ({}),({}) to single ({})
-	$query = trim(strtolower($query)," \t\n");                                 // trim spaces and strolower
+	$query = preg_replace("/\\/\\*.*\\*\\//sU", '', $query);                       // remove multiline comments
+	$query = preg_replace("/([\"'])(?:\\\\.|\\1\\1|.)*\\1/sU", "{}", $query);      // remove quoted strings
+	$query = preg_replace("/(\\W)(?:-?\\d+(?:\\.\\d+)?)/", "\\1{}", $query);       // remove numbers
+	$query = preg_replace("/(\\W)null(?:\\Wnull)*(\\W|\$)/i", "\\1{}\\2", $query); // remove nulls
+	$query = preg_replace("/\\s+/", ' ', $query);                                  // remove multiple spaces
+	$query = preg_replace("/ (\\W)/","\\1", $query);                               // remove spaces bordering with non-characters
+	$query = preg_replace("/(\\W) /","\\1", $query);                               // --,--
+	$query = preg_replace("/\\{\\}(?:,\\{\\})+/", "{}", $query);                   // repetitive {},{} to single {}
+	$query = preg_replace("/\\(\\{\\}\\)(?:,\\(\\{\\}\\))+/", "({})", $query);     // repetitive ({}),({}) to single ({})
+	$query = trim(strtolower($query)," \t\n");                                     // trim spaces and strolower
 	return $query;
 }
 
@@ -48,12 +49,6 @@ function normalize($q)
  */
 class extractor
 {
-	/**
-	 * Size of a chunk of file to preread into memory
-	 *
-	 */
-	const CHUNK_SIZE = 102400; // bytes
-
 	/**
 	 * Open file pointer
 	 *
@@ -208,6 +203,7 @@ else
 
 $top  = null;
 $prefx = null;
+$sample = false;
 
 array_shift($argv); // 0
 array_shift($argv); // 1
@@ -232,6 +228,10 @@ while(null !== ($com = array_shift($argv)))
 			$prefx = array_map('trim', $prefx);
 			$prefx = array_map('strtolower', $prefx);
 			$prefx = array_flip($prefx);
+			break;
+
+		case '-sample':
+			$sample = true;
 			break;
 	}
 }
