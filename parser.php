@@ -179,34 +179,49 @@ class csvreader
 	}
 }
 
+/**
+ * Output program usage doc and die
+ *
+ * @param string $msg - describing message
+ */
 function doc($msg = null)
 {
 	echo (!is_null($msg) ? ($msg."\n\n") : '').
 
-		"MyProfi: mysql log profiler and analyzer\n",
-		"usage: ",
-		"php parser.php INPUTFILE [>outputfile]\n\n",
-		"If file extension is .csv, then file is parsed as\n ",
-		"csv table file for query logging by default as of mysql 5.1\n ";
+		"MyProfi: mysql log profiler and analyzer\n\n",
+		"Usage: ",
+		"php parser.php [OPTIONS] INPUTFILE \n\n",
+		"Options:\n",
+		"-top N\n",
+		"\tOutput only N top queries\n",
+		"-type querytypes\n",
+		"\tOuput only statistics for the queries of given querytypes\n",
+		"\tquerytypes are coma separated words that queries may begin with\n",
+		"-sample\n",
+		"\tOutput one sample query per each query pattern to be able to use it\n",
+		"\twith EXPLAIN query to analyze it's performance\n",
+		"-csv\n",
+		"\tConsideres an input file to be in csv format\n",
+		"\tNote, that if the input file extension is .csv, it is also considered as csv\n"
+		;
 	exit;
 }
 
 echo date("\nH:i:s\n");
 
 if (isset($argv[1]))
-	$file = $argv[1];
+	$file = array_pop($argv); // the last argument always must be an input filename
 else
 {
-	$file = 'atari.log';
-	// doc();
+	doc('Error: no input file specified');
 }
 
-$top  = null;
-$prefx = null;
+$top    = null;
+$prefx  = null;
 $sample = false;
+$csv    = false;
 
-array_shift($argv); // 0
-array_shift($argv); // 1
+array_shift($argv); // get rid of program filename ($argvs[0])
 
 // getting command line options
 while(null !== ($com = array_shift($argv)))
@@ -233,15 +248,19 @@ while(null !== ($com = array_shift($argv)))
 		case '-sample':
 			$sample = true;
 			break;
+
+		case '-csv':
+			$csv = true;
+			break;
 	}
 }
 
 if (false === ($fp = fopen($file, "rb")))
 {
-	doc('Error: cannot open file');
+	doc('Error: cannot open input file '.$file);
 }
 
-if (strcasecmp(".csv", substr($file, -4)) == 0)
+if ($csv || (strcasecmp(".csv", substr($file, -4)) == 0))
 	$ex = new csvreader($fp);
 else
 	$ex = new extractor($fp);
