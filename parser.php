@@ -194,20 +194,20 @@ function doc($msg = null)
 		"Options:\n",
 		"-top N\n",
 		"\tOutput only N top queries\n",
-		"-type querytypes\n",
-		"\tOuput only statistics for the queries of given querytypes\n",
-		"\tquerytypes are coma separated words that queries may begin with\n",
+		"-type \"query types\"\n",
+		"\tOuput only statistics for the queries of given query types.\n",
+		"\tQuery types are comma separated words that queries may begin with\n",
 		"-sample\n",
 		"\tOutput one sample query per each query pattern to be able to use it\n",
 		"\twith EXPLAIN query to analyze it's performance\n",
 		"-csv\n",
 		"\tConsideres an input file to be in csv format\n",
-		"\tNote, that if the input file extension is .csv, it is also considered as csv\n"
+		"\tNote, that if the input file extension is .csv, it is also considered as csv\n\n",
+		"Example:\n",
+		"\tphp parser.php -csv -top 10 -type \"select, update\" general_log.csv\n"
 		;
 	exit;
 }
-
-echo date("\nH:i:s\n");
 
 if (isset($argv[1]))
 	$file = array_pop($argv); // the last argument always must be an input filename
@@ -319,5 +319,4 @@ foreach($nums as $hash => $num)
 	printf("%d.\t% -10s [% 5s%%] - %s\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $queries[$hash]);
 }
 printf("---------------\nTotal: ".number_format(--$j, 0, '', ' ')." patterns");
-echo date("\nH:i:s");
 ?>
