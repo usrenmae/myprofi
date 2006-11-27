@@ -44,28 +44,91 @@ function normalize($q)
 }
 
 /**
- * Extracts normalized queries from mysql query log one by one
+ * Output program usage doc and die
+ *
+ * @param string $msg - describing message
+ */
+function doc($msg = null)
+{
+	echo (!is_null($msg) ? ($msg."\n\n") : '').
+
+		"MyProfi: mysql log profiler and analyzer\n\n",
+		"Usage: ",
+		"php parser.php [OPTIONS] INPUTFILE \n\n",
+		"Options:\n",
+		"-top N\n",
+		"\tOutput only N top queries\n",
+		"-type \"query types\"\n",
+		"\tOuput only statistics for the queries of given query types.\n",
+		"\tQuery types are comma separated words that queries may begin with\n",
+		"-sample\n",
+		"\tOutput one sample query per each query pattern to be able to use it\n",
+		"\twith EXPLAIN query to analyze it's performance\n",
+		"-csv\n",
+		"\tConsideres an input file to be in csv format\n",
+		"\tNote, that if the input file extension is .csv, it is also considered as csv\n\n",
+		"Example:\n",
+		"\tphp parser.php -csv -top 10 -type \"select, update\" general_log.csv\n"
+		;
+	exit;
+}
+
+/**
+ * Interface for all query fetchers
  *
  */
-class extractor
+interface query_fetcher
 {
 	/**
-	 * Open file pointer
+	 * Get next query in the flow
+	 *
+	 */
+	public function get_query();
+}
+
+/**
+ * Generral filereader class
+ *
+ */
+class filereader
+{
+	/**
+	 * File pointer
 	 *
 	 * @var resource
 	 */
-	protected $fp;
+	public $fp;
 
 	/**
-	 * Initialize extractor object
+	 * Attempts to open a file
+	 * Dies on failure
 	 *
-	 * @param resource $fp - file pointer
+	 * @param string $filename
 	 */
-	public function __construct($fp)
+	public function __construct($filename)
 	{
-		$this->fp = $fp;
+		if (false === ($fp = fopen($filename, "rb")))
+		{
+			doc('Error: cannot open input file '.$filename);
+		}
 	}
 
+	/**
+	 * Close file on exit
+	 *
+	 */
+	public function __destruct()
+	{
+		fclose($this->fp);
+	}
+}
+
+/**
+ * Extracts normalized queries from mysql query log one by one
+ *
+ */
+class extractor extends filereader implements query_fetcher
+{
 	/**
 	 * Fetch the next query pattern from stream
 	 *
@@ -142,25 +205,8 @@ class extractor
  * Read mysql query log in csv format (as of mysql 5.1 it by default)
  *
  */
-class csvreader
+class csvreader extends filereader implements query_fetcher
 {
-	/**
-	 * csv file pointer
-	 *
-	 * @var resource
-	 */
-	protected $fp = null;
-
-	/**
-	 * Initialize object
-	 *
-	 * @param unknown_type $fp
-	 */
-	public function __construct($fp)
-	{
-		$this->fp = $fp;
-	}
-
 	/**
 	 * Fetch next query from csv file
 	 *
@@ -180,50 +226,194 @@ class csvreader
 }
 
 /**
- * Output program usage doc and die
+ * Main statistics gathering class
  *
- * @param string $msg - describing message
  */
-function doc($msg = null)
+class myprofi
 {
-	echo (!is_null($msg) ? ($msg."\n\n") : '').
+	/**
+	 * Query fetcher class
+	 *
+	 * @var mixed
+	 */
+	protected $fetcher;
 
-		"MyProfi: mysql log profiler and analyzer\n\n",
-		"Usage: ",
-		"php parser.php [OPTIONS] INPUTFILE \n\n",
-		"Options:\n",
-		"-top N\n",
-		"\tOutput only N top queries\n",
-		"-type \"query types\"\n",
-		"\tOuput only statistics for the queries of given query types.\n",
-		"\tQuery types are comma separated words that queries may begin with\n",
-		"-sample\n",
-		"\tOutput one sample query per each query pattern to be able to use it\n",
-		"\twith EXPLAIN query to analyze it's performance\n",
-		"-csv\n",
-		"\tConsideres an input file to be in csv format\n",
-		"\tNote, that if the input file extension is .csv, it is also considered as csv\n\n",
-		"Example:\n",
-		"\tphp parser.php -csv -top 10 -type \"select, update\" general_log.csv\n"
-		;
-	exit;
+	/**
+	 * Top number of queries to output in stats
+	 *
+	 * @var integer
+	 */
+	protected $top = null;
+
+	/**
+	 * Only queries of these types to calculate
+	 *
+	 * @var array
+	 */
+	protected $types = null;
+
+	/**
+	 * Will the input file be processed as CSV formatted
+	 *
+	 * @var boolean
+	 */
+	protected $csv = false;
+
+	/**
+	 * Will the statistics include a sample query for each
+	 * pattern
+	 *
+	 * @var boolean
+	 */
+	protected $sample = false;
+
+	/**
+	 * Input filename
+	 */
+	protected $filename;
+
+	/**
+	 * Set the object that can fetch queries one by one from
+	 * some storage
+	 *
+	 * @param query_fetcher $prov
+	 */
+	protected function set_data_provider(query_fetcher $prov)
+	{
+		$this->fetcher = $prov;
+	}
+
+	/**
+	 * Set maximum number of queries
+	 *
+	 * @param integer $top
+	 */
+	public function top($top)
+	{
+		$this->top = $top;
+	}
+
+	/**
+	 * Set array of query types to calculate
+	 *
+	 * @param string $types - comma separated list of types
+	 */
+	public function types($types)
+	{
+		$types = explode(',', $types);
+		$types = array_map('trim', $types);
+		$types = array_map('strtolower', $types);
+		$types = array_flip($types);
+
+		$this->types = $types;
+	}
+
+	/**
+	 * Set the csv format of an input file
+	 *
+	 * @param boolean $csv
+	 */
+	public function csv($csv)
+	{
+		$this->csv = $csv;
+	}
+
+	/**
+	 * Keep one sample query for each pattern
+	 *
+	 * @param boolean $sample
+	 */
+	public function sample($sample)
+	{
+		$this->sample = $sample;
+	}
+
+	/**
+	 * Set input file
+	 *
+	 * @param string $filename
+	 */
+	public function set_input_file($filename)
+	{
+		if (!$this->csv && (strcasecmp(".csv", substr($filename, -4)) === 0))
+			$this->csv(true);
+
+		$this->filename = $filename;
+	}
+
+	public function get_stats()
+	{
+		if ($this->csv)
+			$this->set_data_provider(new csvreader($this->filename));
+		else
+			$this->set_data_provider(new extractor($this->filename));
+
+		// counters
+		$i = 0;
+		$j = 1;
+
+		// stats arrays
+		$queries = array();
+		$nums    = array();
+		$types   = array();
+		$samples = array();
+
+		// temporary assigned properties
+		$prefx   = $this->types;
+		$ex      = $this->fetcher;
+
+		// group queries by type and pattern
+		while(($line = $ex->get_query()))
+		{
+			// extract first word to determine query type
+			$t = preg_split("/[\\W]/", $line, 2);
+			$type = $t[0];
+
+			if (!is_null($prefx) && !isset($prefx[$type]))
+				continue;
+
+			$hash = md5($line);
+
+			// calculate query by type
+			if (!array_key_exists($type, $types))
+				$types[$type] = 1;
+			else
+				$types[$type]++;
+
+			// calculate query by pattern
+			if (!array_key_exists($hash, $queries))
+			{
+				$queries[$hash] = $line;
+				$nums[$hash] = 1;
+			}
+			else
+			{
+				$nums[$hash]++;
+			}
+			$i++;
+		}
+		arsort($nums);
+		arsort($types);
+
+		if (!is_null($this->top))
+			$nums = array_slice($nums, 0, $top);
+
+	}
 }
 
+ // the last argument always must be an input filename
 if (isset($argv[1]))
-	$file = array_pop($argv); // the last argument always must be an input filename
+	$file = array_pop($argv);
 else
-{
 	doc('Error: no input file specified');
-}
 
-$top    = null;
-$prefx  = null;
-$sample = false;
-$csv    = false;
+// get rid of program filename ($argvs[0])
+array_shift($argv);
 
-array_shift($argv); // get rid of program filename ($argvs[0])
+// initialize an object
+$myprofi = new myprofi();
 
-// getting command line options
+// iterating through command line options
 while(null !== ($com = array_shift($argv)))
 {
 	switch ($com)
@@ -234,78 +424,23 @@ while(null !== ($com = array_shift($argv)))
 
 			if (!($top = (int)$top))
 				doc('Error: top number must be integer value');
-
+				$myprofi->top($top);
 			break;
 		case '-type':
 			if (is_null($prefx = array_shift($argv)))
 				doc('Error: must specify coma separated list of query types to output');
-			$prefx = explode(',', $prefx);
-			$prefx = array_map('trim', $prefx);
-			$prefx = array_map('strtolower', $prefx);
-			$prefx = array_flip($prefx);
+				$myprofi->types($prefx);
 			break;
 
 		case '-sample':
-			$sample = true;
+			$myprofi->sample(true);
 			break;
 
 		case '-csv':
-			$csv = true;
+			$myprofi->csv(true);
 			break;
 	}
 }
-
-if (false === ($fp = fopen($file, "rb")))
-{
-	doc('Error: cannot open input file '.$file);
-}
-
-if ($csv || (strcasecmp(".csv", substr($file, -4)) == 0))
-	$ex = new csvreader($fp);
-else
-	$ex = new extractor($fp);
-
-$i = 0;
-$j = 1;
-$queries = array();
-$nums = array();
-$types = array();
-
-// group queries by type and pattern
-while(($line = $ex->get_query()))
-{
-	// extract first word to determine query type
-	$t = preg_split("/[\\W]/", $line, 2);
-	$type = $t[0];
-
-	if (!is_null($prefx) && !isset($prefx[$type]))
-		continue;
-
-	$hash = md5($line);
-
-	// calculate query by type
-	if (!array_key_exists($type, $types))
-		$types[$type] = 1;
-	else
-		$types[$type]++;
-
-	// calculate query by pattern
-	if (!array_key_exists($hash, $queries))
-	{
-		$queries[$hash] = $line;
-		$nums[$hash] = 1;
-	}
-	else
-	{
-		$nums[$hash]++;
-	}
-	$i++;
-}
-arsort($nums);
-arsort($types);
-
-if (!is_null($top))
-	$nums = array_slice($nums, 0, $top);
 
 printf("Queries by type:\n================\n");
 foreach($types as $type=>$num)
