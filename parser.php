@@ -90,7 +90,7 @@ interface query_fetcher
  * Generral filereader class
  *
  */
-class filereader
+abstract class filereader
 {
 	/**
 	 * File pointer
@@ -107,7 +107,7 @@ class filereader
 	 */
 	public function __construct($filename)
 	{
-		if (false === ($fp = fopen($filename, "rb")))
+		if (false === ($this->fp = fopen($filename, "rb")))
 		{
 			doc('Error: cannot open input file '.$filename);
 		}
@@ -272,6 +272,11 @@ class myprofi
 	 */
 	protected $filename;
 
+	protected $_queries = array();
+	protected $_nums    = array();
+	protected $_types   = array();
+	protected $total    = 0;
+
 	/**
 	 * Set the object that can fetch queries one by one from
 	 * some storage
@@ -341,7 +346,11 @@ class myprofi
 		$this->filename = $filename;
 	}
 
-	public function get_stats()
+	/**
+	 * The main routine so count statistics
+	 *
+	 */
+	public function process_queries()
 	{
 		if ($this->csv)
 			$this->set_data_provider(new csvreader($this->filename));
@@ -350,7 +359,6 @@ class myprofi
 
 		// counters
 		$i = 0;
-		$j = 1;
 
 		// stats arrays
 		$queries = array();
@@ -396,8 +404,31 @@ class myprofi
 		arsort($types);
 
 		if (!is_null($this->top))
-			$nums = array_slice($nums, 0, $top);
+			$nums = array_slice($nums, 0, $this->top);
 
+		$this->_queries = $queries;
+		$this->_nums    = $nums;
+		$this->_types   = $types;
+
+		$this->total    = $i;
+	}
+
+	public function get_types_stat()
+	{
+		return new ArrayIterator($this->_types);
+	}
+
+	public function get_pattern_stats()
+	{
+		if (list($h,$n) = each ($this->_nums))
+			return array($n, $this->_queries[$h]);
+		else
+			return false;
+	}
+
+	public function total()
+	{
+		return $this->total;
 	}
 }
 
@@ -405,7 +436,10 @@ class myprofi
 if (isset($argv[1]))
 	$file = array_pop($argv);
 else
-	doc('Error: no input file specified');
+{
+	// doc('Error: no input file specified');
+	$file = 'zqueries.log';
+}
 
 // get rid of program filename ($argvs[0])
 array_shift($argv);
@@ -442,16 +476,21 @@ while(null !== ($com = array_shift($argv)))
 	}
 }
 
+$myprofi->set_input_file($file);
+$myprofi->process_queries();
+
+$i = $myprofi->total();
+
 printf("Queries by type:\n================\n");
-foreach($types as $type=>$num)
+foreach($myprofi->get_types_stat() as $type => $num)
 {
 	printf("% -20s % -10s [%5s%%] \n", $type, number_format($num, 0, '', ' '), number_format(100*$num/$i,2));
 }
 printf("---------------\nTotal: ".number_format($i, 0, '', ' ')." queries\n\n\n");
 printf("Queries by pattern:\n===================\n");
-foreach($nums as $hash => $num)
+while(list($num, $query) = each($myprofi->get_pattern_stats()))
 {
-	printf("%d.\t% -10s [% 5s%%] - %s\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $queries[$hash]);
+	printf("%d.\t% -10s [% 5s%%] - %s\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $query);
 }
 printf("---------------\nTotal: ".number_format(--$j, 0, '', ' ')." patterns");
 ?>
