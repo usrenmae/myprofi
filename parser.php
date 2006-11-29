@@ -421,7 +421,9 @@ class myprofi
 	public function get_pattern_stats()
 	{
 		if (list($h,$n) = each ($this->_nums))
+		{
 			return array($n, $this->_queries[$h]);
+		}
 		else
 			return false;
 	}
@@ -480,7 +482,7 @@ $myprofi->set_input_file($file);
 $myprofi->process_queries();
 
 $i = $myprofi->total();
-
+$j = 1;
 printf("Queries by type:\n================\n");
 foreach($myprofi->get_types_stat() as $type => $num)
 {
@@ -488,7 +490,7 @@ foreach($myprofi->get_types_stat() as $type => $num)
 }
 printf("---------------\nTotal: ".number_format($i, 0, '', ' ')." queries\n\n\n");
 printf("Queries by pattern:\n===================\n");
-while(list($num, $query) = each($myprofi->get_pattern_stats()))
+while(list($num, $query) = $myprofi->get_pattern_stats())
 {
 	printf("%d.\t% -10s [% 5s%%] - %s\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $query);
 }
