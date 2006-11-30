@@ -34,6 +34,7 @@ function normalize($q)
 	$query = preg_replace("/([\"'])(?:\\\\.|\\1\\1|.)*\\1/sU", "{}", $query);      // remove quoted strings
 	$query = preg_replace("/(\\W)(?:-?\\d+(?:\\.\\d+)?)/", "\\1{}", $query);       // remove numbers
 	$query = preg_replace("/(\\W)null(?:\\Wnull)*(\\W|\$)/i", "\\1{}\\2", $query); // remove nulls
+	$query = str_replace (array("\\n", "\\t", "\\0"), ' ', $query);                // replace escaped linebreaks
 	$query = preg_replace("/\\s+/", ' ', $query);                                  // remove multiple spaces
 	$query = preg_replace("/ (\\W)/","\\1", $query);                               // remove spaces bordering with non-characters
 	$query = preg_replace("/(\\W) /","\\1", $query);                               // --,--
@@ -145,14 +146,14 @@ class extractor extends filereader implements query_fetcher
 
 		while(($line = fgets($fp)))
 		{
-			$line = rtrim($line,"\n");
+			$line = rtrim($line,"\r\n");
 
 			// skip server start log lines
 			if (substr($line, -13) == "started with:")
 			{
 				fgets($fp); // skip TCP Port: 3306, Named Pipe: (null)
 				fgets($fp); // skip Time                 Id Command    Argument
-				$line = fgets($fp);
+				continue;
 			}
 
 			$matches = array();
@@ -197,7 +198,7 @@ class extractor extends filereader implements query_fetcher
 			}
 		}
 
-		return ($return === '' || is_null($return)? false : ('' === ($r = normalize($return)) ? true : $r));
+		return ($return === '' || is_null($return)? false : $return);
 	}
 }
 
@@ -219,7 +220,11 @@ class csvreader extends filereader implements query_fetcher
 			if ((!isset($data[4])) || (($data[4] !== "Query") && ($data[4] !== "Execute")) || (!$data[5]))
 				continue;
 
-			return normalize(str_replace(array("\\\\",'\\"'), array("\\",'"'), $data[5]));
+			// cut statement id from prefix of prepared statement
+			$d5 = $data[5];
+			$query = ('Execute' == $data[4] ? substr($d5, strpos($d5,']')+1) : $d5 );
+
+			return str_replace(array("\\\\",'\\"'), array("\\",'"'), $query);
 		}
 		return false;
 	}
@@ -373,6 +378,8 @@ class myprofi
 		// group queries by type and pattern
 		while(($line = $ex->get_query()))
 		{
+			if ('' == ($line = normalize($line))) continue;
+
 			// extract first word to determine query type
 			$t = preg_split("/[\\W]/", $line, 2);
 			$type = $t[0];
