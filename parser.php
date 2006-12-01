@@ -446,8 +446,7 @@ if (isset($argv[1]))
 	$file = array_pop($argv);
 else
 {
-	// doc('Error: no input file specified');
-	$file = 'zqueries.log';
+	doc('Error: no input file specified');
 }
 
 // get rid of program filename ($argvs[0])
