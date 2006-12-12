@@ -40,7 +40,7 @@ function normalize($q)
 	$query = preg_replace("/(\\W) /","\\1", $query);                               // --,--
 	$query = preg_replace("/\\{\\}(?:,\\{\\})+/", "{}", $query);                   // repetitive {},{} to single {}
 	$query = preg_replace("/\\(\\{\\}\\)(?:,\\(\\{\\}\\))+/", "({})", $query);     // repetitive ({}),({}) to single ({})
-	$query = trim(strtolower($query)," \t\n");                                     // trim spaces and strolower
+	$query = strtolower(trim($query," \t\n)("));                                     // trim spaces and strolower
 	return $query;
 }
 
