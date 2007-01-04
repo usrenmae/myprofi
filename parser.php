@@ -203,6 +203,75 @@ class extractor extends filereader implements query_fetcher
 }
 
 /**
+ * Extracts normalized queries from mysql slow query log one by one
+ *
+ */
+class slow_extractor extends filereader implements query_fetcher
+{
+	/**
+	 * Fetch the next query pattern from stream
+	 *
+	 * @return string
+	 */
+	public function get_query()
+	{
+		$currstatement = '';
+
+		$fp = $this->fp;
+
+		while(($line = fgets($fp)))
+		{
+			$line = rtrim($line,"\r\n");
+
+			if ($this->is_separator($line, $fp))
+			{
+				if ($currstatement !== '')
+				{
+					return $currstatement;
+				}
+			}
+			else
+			{
+				$currstatement .= $line;
+			}
+		}
+	}
+
+	protected function is_separator(&$line, $fp)
+	{
+		// skip server start log lines
+		/*
+		/usr/sbin/mysqld, Version: 5.0.26-log. started with:
+		Tcp port: 3306  Unix socket: /var/lib/mysql/mysqldb/mysql.sock
+		Time                 Id Command    Argument
+		*/
+		if (substr($line, -13) == "started with:")
+		{
+			fgets($fp); // skip TCP Port: 3306, Named Pipe: (null)
+			fgets($fp); // skip Time                 Id Command    Argument
+			return true;
+		}
+
+		// skip command information
+		# Time: 070103 16:53:22
+		# User@Host: photo[photo] @ dopey [192.168.16.70]
+		# Query_time: 14  Lock_time: 0  Rows_sent: 93  Rows_examined: 3891399
+
+		$linestart = substr($line, 0, 14);
+
+		if (!strncmp($linestart, '# Time: ', 8)
+			|| !strncmp($line, '# User@Host: ', 13)
+			|| !strncmp($line, '# Query_time: ', 14))
+			return true;
+
+		if (preg_match('/(?:^use [^ ]+;$)|(?:^SET timestamp=\\d+;$)/', $line))
+			return true;
+
+		return false;
+	}
+}
+
+/**
  * Read mysql query log in csv format (as of mysql 5.1 it by default)
  *
  */
@@ -258,11 +327,18 @@ class myprofi
 	protected $types = null;
 
 	/**
-	 * Will the input file be processed as CSV formatted
+	 * Will the input file be treated as CSV formatted
 	 *
 	 * @var boolean
 	 */
 	protected $csv = false;
+
+	/**
+	 * Will the input file be treated as slow query log
+	 *
+	 * @var boolean
+	 */
+	protected $slow = false;
 
 	/**
 	 * Will the statistics include a sample query for each
@@ -329,6 +405,16 @@ class myprofi
 	}
 
 	/**
+	 * Set the csv format of an input file
+	 *
+	 * @param boolean $csv
+	 */
+	public function slow($slow)
+	{
+		$this->slow = $slow;
+	}
+
+	/**
 	 * Keep one sample query for each pattern
 	 *
 	 * @param boolean $sample
@@ -359,6 +445,8 @@ class myprofi
 	{
 		if ($this->csv)
 			$this->set_data_provider(new csvreader($this->filename));
+		elseif ($this->slow)
+			$this->set_data_provider(new slow_extractor($this->filename));
 		else
 			$this->set_data_provider(new extractor($this->filename));
 
@@ -441,6 +529,12 @@ class myprofi
 	}
 }
 
+if (!isset($argv))
+{
+	$argv[] = __FILE__;
+	$argv[] = '-slow';
+	$argv[] = 'slow2.log';
+}
  // the last argument always must be an input filename
 if (isset($argv[1]))
 	$file = array_pop($argv);
@@ -480,6 +574,10 @@ while(null !== ($com = array_shift($argv)))
 
 		case '-csv':
 			$myprofi->csv(true);
+			break;
+
+		case '-slow':
+			$myprofi->slow(true);
 			break;
 	}
 }
