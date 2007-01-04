@@ -67,7 +67,9 @@ function doc($msg = null)
 		"\twith EXPLAIN query to analyze it's performance\n",
 		"-csv\n",
 		"\tConsideres an input file to be in csv format\n",
-		"\tNote, that if the input file extension is .csv, it is also considered as csv\n\n",
+		"\tNote, that if the input file extension is .csv, it is also considered as csv\n",
+		"-slow\n",
+		"\tTreats an input file as a slow query log\n\n",
 		"Example:\n",
 		"\tphp parser.php -csv -top 10 -type \"select, update\" general_log.csv\n"
 		;
@@ -108,7 +110,7 @@ abstract class filereader
 	 */
 	public function __construct($filename)
 	{
-		if (false === ($this->fp = fopen($filename, "rb")))
+		if (false === ($this->fp = @fopen($filename, "rb")))
 		{
 			doc('Error: cannot open input file '.$filename);
 		}
@@ -120,7 +122,8 @@ abstract class filereader
 	 */
 	public function __destruct()
 	{
-		fclose($this->fp);
+		if ($this->fp)
+			fclose($this->fp);
 	}
 }
 
@@ -529,13 +532,7 @@ class myprofi
 	}
 }
 
-if (!isset($argv))
-{
-	$argv[] = __FILE__;
-	$argv[] = '-slow';
-	$argv[] = 'slow2.log';
-}
- // the last argument always must be an input filename
+// the last argument always must be an input filename
 if (isset($argv[1]))
 	$file = array_pop($argv);
 else
