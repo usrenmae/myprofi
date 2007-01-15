@@ -38,7 +38,7 @@ function normalize($q)
 	$query = preg_replace("/\\s+/", ' ', $query);                                  // remove multiple spaces
 	$query = preg_replace("/ (\\W)/","\\1", $query);                               // remove spaces bordering with non-characters
 	$query = preg_replace("/(\\W) /","\\1", $query);                               // --,--
-	$query = preg_replace("/\\{\\}(?:,\\{\\})+/", "{}", $query);                   // repetitive {},{} to single {}
+	$query = preg_replace("/\\{\\}(?:,?\\{\\})+/", "{}", $query);                   // repetitive {},{} to single {}
 	$query = preg_replace("/\\(\\{\\}\\)(?:,\\(\\{\\}\\))+/", "({})", $query);     // repetitive ({}),({}) to single ({})
 	$query = strtolower(trim($query," \t\n)("));                                     // trim spaces and strolower
 	return $query;
@@ -235,7 +235,7 @@ class slow_extractor extends filereader implements query_fetcher
 
 				if ($currstatement !== '')
 				{
-					return array_merge($this->stat, array('stmt'=>$currstatement));
+					return array_merge($this->stat, array($currstatement));
 				}
 			}
 			else
@@ -245,7 +245,7 @@ class slow_extractor extends filereader implements query_fetcher
 		}
 
 		if ($currstatement !== '')
-			return array_merge($this->stat, array('stmt'=>$currstatement));
+			return array_merge($this->stat, array($currstatement));
 		else
 			return false;
 	}
@@ -322,6 +322,52 @@ class csvreader extends filereader implements query_fetcher
 			return str_replace(array("\\\\",'\\"'), array("\\",'"'), $query);
 		}
 		return false;
+	}
+}
+
+/**
+ * Read mysql slow query log in csv format (as of mysql 5.1 it by default)
+ *
+ */
+class slow_csvreader extends filereader implements query_fetcher
+{
+	/**
+	 * Fetch next query from csv file
+	 *
+	 * @return string - or FALSE on file end
+	 */
+	public function get_query()
+	{
+		while (false !== ($data = fgetcsv($this->fp)))
+		{
+			if (!isset($data[10]))
+				continue;
+
+			$query_time    = self::time_to_int($data[2]);
+			$lock_time     = self::time_to_int($data[3]);
+			$rows_sent     = $data[4];
+			$rows_examined = $data[5];
+
+			$statement     = str_replace(array("\\\\",'\\"'), array("\\",'"'), $data[10]);
+
+			// cut statement id from prefix of prepared statement
+
+			return array($query_time, $lock_time, $rows_sent, $rows_examined, $statement);
+		}
+		return false;
+	}
+
+	/**
+	 * Converts time value in format H:i:s into integer
+	 * representation of number of total seconds
+	 *
+	 * @param string $time
+	 * @return integer
+	 */
+	protected static function time_to_int($time)
+	{
+		list($h, $m, $s) = explode(':', $time);
+		return ($h*3600 + $m*60 + $s);
 	}
 }
 
@@ -472,7 +518,12 @@ class myprofi
 	public function process_queries()
 	{
 		if ($this->csv)
-			$this->set_data_provider(new csvreader($this->filename));
+		{
+			if ($this->slow)
+				$this->set_data_provider(new slow_csvreader($this->filename));
+			else
+				$this->set_data_provider(new csvreader($this->filename));
+		}
 		elseif ($this->slow)
 			$this->set_data_provider(new slow_extractor($this->filename));
 		else
@@ -579,7 +630,7 @@ class myprofi
 			if ($this->sample)
 				return array($n, $this->_queries[$h], $this->_samples[$h]);
 			else
-				return array($n, $this->_queries[$h]);
+				return array($n, $this->_queries[$h], false);
 		}
 		else
 			return false;
@@ -597,7 +648,8 @@ if (!isset($argv))
 	$argv = array(
 		__FILE__,
 		'-slow',
-		'slow2.log',
+		'-sample',
+		'slow_log.CSV',
 	);
 }
 
