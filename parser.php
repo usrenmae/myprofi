@@ -211,6 +211,8 @@ class extractor extends filereader implements query_fetcher
  */
 class slow_extractor extends filereader implements query_fetcher
 {
+	protected $stat = array();
+
 	/**
 	 * Fetch the next query pattern from stream
 	 *
@@ -226,11 +228,14 @@ class slow_extractor extends filereader implements query_fetcher
 		{
 			$line = rtrim($line,"\r\n");
 
-			if ($this->is_separator($line, $fp))
+			if (($smth = $this->is_separator($line, $fp)))
 			{
+				if (is_array($smth))
+					$this->stat = $smth;
+
 				if ($currstatement !== '')
 				{
-					return $currstatement;
+					return array_merge($this->stat, array('stmt'=>$currstatement));
 				}
 			}
 			else
@@ -238,6 +243,11 @@ class slow_extractor extends filereader implements query_fetcher
 				$currstatement .= $line;
 			}
 		}
+
+		if ($currstatement !== '')
+			return array_merge($this->stat, array('stmt'=>$currstatement));
+		else
+			return false;
 	}
 
 	protected function is_separator(&$line, $fp)
@@ -263,9 +273,22 @@ class slow_extractor extends filereader implements query_fetcher
 		$linestart = substr($line, 0, 14);
 
 		if (!strncmp($linestart, '# Time: ', 8)
-			|| !strncmp($line, '# User@Host: ', 13)
-			|| !strncmp($line, '# Query_time: ', 14))
+			|| !strncmp($line, '# User@Host: ', 13))
 			return true;
+
+		if (!strncmp($line, '# Query_time: ', 14))
+		{
+			$matches = array();
+
+			// floating point numbers matching is needed for
+			// www.mysqlperformanceblog.com slow query patch
+			preg_match('/Query_time: +(\\d*(?:\\.d+)?) +Lock_time: +(\\d*(?:\\.d+)?) +Rows_sent: +(\\d*(?:\\.d+)?) +Rows_examined: +(\\d*(?:\\.d+)?)/', $line, $matches);
+
+			// shift the whole matched string element
+			// leaving only numbers we need
+			array_shift($matches);
+			return $matches;
+		}
 
 		if (preg_match('/(?:^use [^ ]+;$)|(?:^SET timestamp=\\d+;$)/', $line))
 			return true;
@@ -359,6 +382,8 @@ class myprofi
 	protected $_queries = array();
 	protected $_nums    = array();
 	protected $_types   = array();
+	protected $_samples = array();
+
 	protected $total    = 0;
 
 	/**
@@ -461,6 +486,7 @@ class myprofi
 		$nums    = array();
 		$types   = array();
 		$samples = array();
+		$stats   = array();
 
 		// temporary assigned properties
 		$prefx   = $this->types;
@@ -469,6 +495,17 @@ class myprofi
 		// group queries by type and pattern
 		while(($line = $ex->get_query()))
 		{
+			$stat = false;
+
+			if (is_array($line))
+			{
+				$stat = $line;
+				$line = array_pop($stat); // extract statement
+			}
+
+			// keep query sample
+			$smpl = $line;
+
 			if ('' == ($line = normalize($line))) continue;
 
 			// extract first word to determine query type
@@ -489,13 +526,30 @@ class myprofi
 			// calculate query by pattern
 			if (!array_key_exists($hash, $queries))
 			{
-				$queries[$hash] = $line;
-				$nums[$hash] = 1;
+				$queries[$hash] = $line;   // patterns
+				$nums[$hash]    = 1;       // pattern counts
+				$stats[$hash]   = array(); // slow query statistics
+
+				if ($this->sample)
+					$samples[$hash] = $smpl;   // patterns samples
 			}
 			else
 			{
 				$nums[$hash]++;
 			}
+
+			// calculating statistics
+			if ($stat)
+			{
+				foreach($stat as $k=>$v)
+				{
+					if (isset($stats[$hash][$k]))
+						$stats[$hash][$k] += $v;
+					else
+						$stats[$hash][$k] = $v;
+				}
+			}
+
 			$i++;
 		}
 		arsort($nums);
@@ -507,6 +561,8 @@ class myprofi
 		$this->_queries = $queries;
 		$this->_nums    = $nums;
 		$this->_types   = $types;
+		$this->_samples = $samples;
+		$this->_stats   = $stats;
 
 		$this->total    = $i;
 	}
@@ -520,7 +576,10 @@ class myprofi
 	{
 		if (list($h,$n) = each ($this->_nums))
 		{
-			return array($n, $this->_queries[$h]);
+			if ($this->sample)
+				return array($n, $this->_queries[$h], $this->_samples[$h]);
+			else
+				return array($n, $this->_queries[$h]);
 		}
 		else
 			return false;
@@ -531,6 +590,17 @@ class myprofi
 		return $this->total;
 	}
 }
+
+// for debug purposes
+if (!isset($argv))
+{
+	$argv = array(
+		__FILE__,
+		'-slow',
+		'slow2.log',
+	);
+}
+
 
 // the last argument always must be an input filename
 if (isset($argv[1]))
@@ -545,6 +615,8 @@ array_shift($argv);
 
 // initialize an object
 $myprofi = new myprofi();
+
+$sample = false;
 
 // iterating through command line options
 while(null !== ($com = array_shift($argv)))
@@ -567,6 +639,7 @@ while(null !== ($com = array_shift($argv)))
 
 		case '-sample':
 			$myprofi->sample(true);
+			$sample = true;
 			break;
 
 		case '-csv':
@@ -591,9 +664,12 @@ foreach($myprofi->get_types_stat() as $type => $num)
 }
 printf("---------------\nTotal: ".number_format($i, 0, '', ' ')." queries\n\n\n");
 printf("Queries by pattern:\n===================\n");
-while(list($num, $query) = $myprofi->get_pattern_stats())
+while(list($num, $query, $smpl) = $myprofi->get_pattern_stats())
 {
-	printf("%d.\t% -10s [% 5s%%] - %s\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $query);
+	if ($sample)
+		printf("%d.\t% -10s [% 5s%%] - %s\n%s\n\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $query, $smpl);
+	else
+		printf("%d.\t% -10s [% 5s%%] - %s\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $query);
 }
 printf("---------------\nTotal: ".number_format(--$j, 0, '', ' ')." patterns");
 ?>
