@@ -287,7 +287,13 @@ class slow_extractor extends filereader implements query_fetcher
 			// shift the whole matched string element
 			// leaving only numbers we need
 			array_shift($matches);
-			return $matches;
+			$arr = array(
+				'qt'=>array_shift($matches),
+				'lt'=>array_shift($matches),
+				'rs'=>array_shift($matches),
+				're'=>array_shift($matches),
+				);
+			return $arr;
 		}
 
 		if (preg_match('/(?:^use [^ ]+;$)|(?:^SET timestamp=\\d+;$)/', $line))
@@ -352,7 +358,7 @@ class slow_csvreader extends filereader implements query_fetcher
 
 			// cut statement id from prefix of prepared statement
 
-			return array($query_time, $lock_time, $rows_sent, $rows_examined, $statement);
+			return array('qt'=>$query_time, 'lt'=>$lock_time, 'rs'=>$rows_sent, 're'=>$rows_examined, $statement);
 		}
 		return false;
 	}
@@ -419,6 +425,13 @@ class myprofi
 	 * @var boolean
 	 */
 	protected $sample = false;
+
+	/**
+	 * Field name to sort by
+	 *
+	 * @var string
+	 */
+	protected $sort;
 
 	/**
 	 * Input filename
@@ -511,6 +524,11 @@ class myprofi
 		$this->filename = $filename;
 	}
 
+	public function sortby($sort)
+	{
+		$this->sort = $sort;
+	}
+
 	/**
 	 * The main routine so count statistics
 	 *
@@ -551,7 +569,7 @@ class myprofi
 			if (is_array($line))
 			{
 				$stat = $line;
-				$line = array_pop($stat); // extract statement
+				$line = array_pop($stat); // extract statement, it's always the last element of array
 			}
 
 			// keep query sample
@@ -595,15 +613,43 @@ class myprofi
 				foreach($stat as $k=>$v)
 				{
 					if (isset($stats[$hash][$k]))
-						$stats[$hash][$k] += $v;
+					{
+						// sum with total
+						$stats[$hash][$k]['t'] += $v;
+
+						if ($v > $stats[$hash][$k]['m'])
+						{
+							// increase maximum, if the current value is bigger
+							$stats[$hash][$k]['m'] = $v;
+						}
+					}
 					else
-						$stats[$hash][$k] = $v;
+					{
+						// set total and maximum values
+						$stats[$hash][$k] = array('t'=>$v,'m'=>$v);
+					}
 				}
 			}
 
 			$i++;
 		}
-		arsort($nums);
+
+		if ($this->slow)
+		{
+			foreach($stats as $hash => $col)
+			{
+				foreach ($col as $k => $v)
+				{
+					$stats[$hash][$k]['a'] = round($stats[$hash][$k]['t'] / $nums[$hash], 2);
+				}
+			}
+		}
+
+		if ($this->sort)
+			uasort($stats, array($this, 'cmp'));
+		else
+			arsort($nums);
+
 		arsort($types);
 
 		if (!is_null($this->top))
@@ -621,6 +667,32 @@ class myprofi
 	public function get_types_stat()
 	{
 		return new ArrayIterator($this->_types);
+	}
+
+	protected function cmp($a, $b)
+	{
+		$z = array(
+			'qt_total' => array('qt', 't'),
+			'qt_max'   => array('qt', 'm'),
+			'qt_avg'   => array('qt', 'a'),
+
+			'lt_total' => array('lt', 't'),
+			'lt_max'   => array('lt', 'm'),
+			'lt_avg'   => array('lt', 'a'),
+
+			'rs_total' => array('rs', 't'),
+			'rs_max'   => array('rs', 'm'),
+			'rs_avg'   => array('rs', 'a'),
+
+			're_total' => array('re', 't'),
+			're_max'   => array('re', 'm'),
+			're_avg'   => array('re', 'a'),
+		);
+
+		$f = $a[$z[$this->sort][0]][$z[$this->sort][1]];
+		$s = $b[$z[$this->sort][0]][$z[$this->sort][1]];
+
+		return ($f > $s ) ? ($f < $s ? 1 : 0) : -1;
 	}
 
 	public function get_pattern_stats()
@@ -649,6 +721,8 @@ if (!isset($argv))
 		__FILE__,
 		'-slow',
 		'-sample',
+		'-sort',
+		'qt_max',
 		'slow_log.CSV',
 	);
 }
@@ -681,12 +755,13 @@ while(null !== ($com = array_shift($argv)))
 
 			if (!($top = (int)$top))
 				doc('Error: top number must be integer value');
-				$myprofi->top($top);
+			$myprofi->top($top);
 			break;
+
 		case '-type':
 			if (is_null($prefx = array_shift($argv)))
 				doc('Error: must specify coma separated list of query types to output');
-				$myprofi->types($prefx);
+			$myprofi->types($prefx);
 			break;
 
 		case '-sample':
@@ -700,6 +775,12 @@ while(null !== ($com = array_shift($argv)))
 
 		case '-slow':
 			$myprofi->slow(true);
+			break;
+
+		case '-sort':
+			if (is_null($sort = array_shift($argv)))
+				doc('Error: must specify criteria to sort by');
+			$myprofi->sortby($sort);
 			break;
 	}
 }
