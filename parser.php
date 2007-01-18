@@ -442,6 +442,7 @@ class myprofi
 	protected $_nums    = array();
 	protected $_types   = array();
 	protected $_samples = array();
+	protected $_stats = array();
 
 	protected $total    = 0;
 
@@ -634,16 +635,21 @@ class myprofi
 			$i++;
 		}
 
+		$stats2 = array();
 		if ($this->slow)
 		{
 			foreach($stats as $hash => $col)
 			{
 				foreach ($col as $k => $v)
 				{
-					$stats[$hash][$k]['a'] = round($stats[$hash][$k]['t'] / $nums[$hash], 2);
+					$stats2[$hash][$k.'_total'] = $v['t'];
+					$stats2[$hash][$k.'_avg']   = $v['t'] / $nums[$hash];
+					$stats2[$hash][$k.'_max']   = $v['m'];
 				}
 			}
 		}
+
+		$stats = $stats2;
 
 		if ($this->sort)
 			uasort($stats, array($this, 'cmp'));
@@ -671,38 +677,33 @@ class myprofi
 
 	protected function cmp($a, $b)
 	{
-		$z = array(
-			'qt_total' => array('qt', 't'),
-			'qt_max'   => array('qt', 'm'),
-			'qt_avg'   => array('qt', 'a'),
+		$f = $a[$this->sort];
+		$s = $b[$this->sort];
 
-			'lt_total' => array('lt', 't'),
-			'lt_max'   => array('lt', 'm'),
-			'lt_avg'   => array('lt', 'a'),
-
-			'rs_total' => array('rs', 't'),
-			'rs_max'   => array('rs', 'm'),
-			'rs_avg'   => array('rs', 'a'),
-
-			're_total' => array('re', 't'),
-			're_max'   => array('re', 'm'),
-			're_avg'   => array('re', 'a'),
-		);
-
-		$f = $a[$z[$this->sort][0]][$z[$this->sort][1]];
-		$s = $b[$z[$this->sort][0]][$z[$this->sort][1]];
-
-		return ($f > $s ) ? ($f < $s ? 1 : 0) : -1;
+		return ($f < $s ) ? 1 : ($f > $s ? -1 : 0);
 	}
 
 	public function get_pattern_stats()
 	{
-		if (list($h,$n) = each ($this->_nums))
+		$stat = array();
+
+		if ($this->sort)
+			$tmp =& $this->_stats;
+		else
+			$tmp =& $this->_nums;
+
+		if (list($h,$n) = each ($tmp))
 		{
+			if ($this->sort)
+			{
+				$stat = $n;
+				$n = $this->_nums[$h];
+			}
+
 			if ($this->sample)
-				return array($n, $this->_queries[$h], $this->_samples[$h]);
+				return array($n, $this->_queries[$h], $this->_samples[$h], $stat);
 			else
-				return array($n, $this->_queries[$h], false);
+				return array($n, $this->_queries[$h], false, $stat);
 		}
 		else
 			return false;
@@ -720,10 +721,9 @@ if (!isset($argv))
 	$argv = array(
 		__FILE__,
 		'-slow',
-		'-sample',
 		'-sort',
-		'qt_max',
-		'slow_log.CSV',
+		'lt_max',
+		'slow2.log',
 	);
 }
 
@@ -797,12 +797,25 @@ foreach($myprofi->get_types_stat() as $type => $num)
 }
 printf("---------------\nTotal: ".number_format($i, 0, '', ' ')." queries\n\n\n");
 printf("Queries by pattern:\n===================\n");
-while(list($num, $query, $smpl) = $myprofi->get_pattern_stats())
+
+while(list($num, $query, $smpl, $stats) = $myprofi->get_pattern_stats())
 {
-	if ($sample)
-		printf("%d.\t% -10s [% 5s%%] - %s\n%s\n\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $query, $smpl);
+	if ($sort)
+	{
+		$n = $stats[$sort];
+
+		if ($sample)
+			printf("%d.\t% -10s [% 9s] - %s\n%s\n\n", $j++, number_format($num, 0, '', ' '), number_format($n), $query, $smpl);
+		else
+			printf("%d.\t% -10s [% 9s] - %s\n", $j++, number_format($num, 0, '', ' '), number_format($n), $query);
+	}
 	else
-		printf("%d.\t% -10s [% 5s%%] - %s\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $query);
+	{
+		if ($sample)
+			printf("%d.\t% -10s [% 5s%%] - %s\n%s\n\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $query, $smpl);
+		else
+			printf("%d.\t% -10s [% 5s%%] - %s\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $query);
+	}
 }
 printf("---------------\nTotal: ".number_format(--$j, 0, '', ' ')." patterns");
 ?>
