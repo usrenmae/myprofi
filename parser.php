@@ -497,8 +497,11 @@ class myprofi
 	 *
 	 * @param boolean $csv
 	 */
-	public function slow($slow)
+	public function slow($slow = null)
 	{
+		if (is_null($slow))
+			return $this->slow;
+
 		$this->slow = $slow;
 	}
 
@@ -720,13 +723,29 @@ if (!isset($argv))
 {
 	$argv = array(
 		__FILE__,
-		'-slow',
+//		'-slow',
 		'-sort',
-		'lt_max',
-		'slow2.log',
+		'qt_total',
+		'-top',
+		'10',
+		'queries.log',
 	);
 }
 
+$fields = array(
+	'qt_total',
+	'qt_avg',
+	'qt_max',
+	'lt_total',
+	'lt_avg',
+	'lt_max',
+	'rs_total',
+	'rs_avg',
+	'rs_max',
+	're_total',
+	're_avg',
+	're_max',
+);
 
 // the last argument always must be an input filename
 if (isset($argv[1]))
@@ -780,9 +799,16 @@ while(null !== ($com = array_shift($argv)))
 		case '-sort':
 			if (is_null($sort = array_shift($argv)))
 				doc('Error: must specify criteria to sort by');
+			elseif(false === array_search($sort, $fields))
+				doc('Unknown sorting field "'.$sort.'"');
 			$myprofi->sortby($sort);
 			break;
 	}
+}
+if (!$myprofi->slow() && $sort)
+{
+	$sort = false;
+	$myprofi->sortby(false);
 }
 
 $myprofi->set_input_file($file);
@@ -803,19 +829,15 @@ while(list($num, $query, $smpl, $stats) = $myprofi->get_pattern_stats())
 	if ($sort)
 	{
 		$n = $stats[$sort];
-
-		if ($sample)
-			printf("%d.\t% -10s [% 9s] - %s\n%s\n\n", $j++, number_format($num, 0, '', ' '), number_format($n), $query, $smpl);
-		else
-			printf("%d.\t% -10s [% 9s] - %s\n", $j++, number_format($num, 0, '', ' '), number_format($n), $query);
+		printf("%d.\t% -10s [%10s] - %s\n", $j, number_format($num, 0, '', ' '), number_format($n, 2), $query);
 	}
 	else
 	{
-		if ($sample)
-			printf("%d.\t% -10s [% 5s%%] - %s\n%s\n\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $query, $smpl);
-		else
-			printf("%d.\t% -10s [% 5s%%] - %s\n", $j++, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $query);
+		printf("%d.\t% -10s [% 5s%%] - %s\n", $j, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $query);
 	}
+	if ($smpl) printf("%s\n\n", $smpl);
+
+	$j++;
 }
 printf("---------------\nTotal: ".number_format(--$j, 0, '', ' ')." patterns");
 ?>
