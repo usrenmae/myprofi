@@ -51,28 +51,39 @@ function normalize($q)
  */
 function doc($msg = null)
 {
-	echo (!is_null($msg) ? ($msg."\n\n") : '').
+	file_put_contents('php://stderr', (!is_null($msg) ? ($msg."\n\n") : '').
 
-		"MyProfi: mysql log profiler and analyzer\n\n",
-		"Usage: ",
-		"php parser.php [OPTIONS] INPUTFILE \n\n",
-		"Options:\n",
-		"-top N\n",
-		"\tOutput only N top queries\n",
-		"-type \"query types\"\n",
-		"\tOuput only statistics for the queries of given query types.\n",
-		"\tQuery types are comma separated words that queries may begin with\n",
-		"-sample\n",
-		"\tOutput one sample query per each query pattern to be able to use it\n",
-		"\twith EXPLAIN query to analyze it's performance\n",
-		"-csv\n",
-		"\tConsideres an input file to be in csv format\n",
-		"\tNote, that if the input file extension is .csv, it is also considered as csv\n",
-		"-slow\n",
-		"\tTreats an input file as a slow query log\n\n",
-		"Example:\n",
-		"\tphp parser.php -csv -top 10 -type \"select, update\" general_log.csv\n"
-		;
+'MyProfi: mysql log profiler and analyzer
+
+Usage: php parser.php [OPTIONS] INPUTFILE
+
+Options:
+-top N
+	Output only N top queries
+-type "query types"
+	Ouput only statistics for the queries of given query types.
+	Query types are comma separated words that queries may begin with
+-sample
+	Output one sample query per each query pattern to be able to use it
+	with EXPLAIN query to analyze its performance
+-csv
+	Consideres an input file to be in csv format
+	Note, that if the input file extension is .csv, it is also considered as csv
+-slow
+	Treats an input file as a slow query log
+-sort CRITERIA
+	Sort output statistics by given CRITERIA.
+	Works only for slow query log format.
+	Possible values of CRITERIA: qt_total | qt_avg | qt_max | lt_total | lt_avg | lt_max | rs_total
+	 rs_avg | rs_max | re_total | re_avg | re_max,
+	 where two-letter prefix stands for "Query time", "Lock time", "Rows sent", "Rows executed"
+	 values taken from data provided by sloq query log respectively.
+	 Suffix after _ character tells MyProfi to take total, maximum or average
+	 calculated values.
+
+Example:
+	php parser.php -csv -top 10 -type "select, update" general_log.csv
+');
 	exit;
 }
 
@@ -662,7 +673,13 @@ class myprofi
 		arsort($types);
 
 		if (!is_null($this->top))
-			$nums = array_slice($nums, 0, $this->top);
+		{
+			if($this->sort)
+				$stats = array_slice($stats, 0, $this->top);
+			else
+				$nums = array_slice($nums, 0, $this->top);
+
+		}
 
 		$this->_queries = $queries;
 		$this->_nums    = $nums;
