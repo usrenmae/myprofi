@@ -1,3 +1,4 @@
+#!/usr/bin/php
 <?php
 
 /**
@@ -101,7 +102,7 @@ interface query_fetcher
 }
 
 /**
- * Generral filereader class
+ * General filereader class
  *
  */
 abstract class filereader
