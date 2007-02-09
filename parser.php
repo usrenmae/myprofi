@@ -781,6 +781,8 @@ $myprofi = new myprofi();
 
 $sample = false;
 
+$sort = false;
+
 // iterating through command line options
 while(null !== ($com = array_shift($argv)))
 {
