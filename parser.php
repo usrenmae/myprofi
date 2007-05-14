@@ -1,6 +1,7 @@
 #!/usr/bin/php
 <?php
-
+error_reporting(E_ALL);
+ini_set('display_errors', true);
 /**
  * MyProfi is mysql profiler and anlyzer, which outputs statistics of mostly
  * used queries by reading query log file.
@@ -39,9 +40,9 @@ function normalize($q)
 	$query = preg_replace("/\\s+/", ' ', $query);                                  // remove multiple spaces
 	$query = preg_replace("/ (\\W)/","\\1", $query);                               // remove spaces bordering with non-characters
 	$query = preg_replace("/(\\W) /","\\1", $query);                               // --,--
-	$query = preg_replace("/\\{\\}(?:,?\\{\\})+/", "{}", $query);                   // repetitive {},{} to single {}
+	$query = preg_replace("/\\{\\}(?:,?\\{\\})+/", "{}", $query);                  // repetitive {},{} to single {}
 	$query = preg_replace("/\\(\\{\\}\\)(?:,\\(\\{\\}\\))+/", "({})", $query);     // repetitive ({}),({}) to single ({})
-	$query = strtolower(trim($query," \t\n)("));                                     // trim spaces and strolower
+	$query = strtolower(trim($query," \t\n)("));                                   // trim spaces and strolower
 	return $query;
 }
 
@@ -64,6 +65,8 @@ Options:
 -type "query types"
 	Ouput only statistics for the queries of given query types.
 	Query types are comma separated words that queries may begin with
+-html
+	Output statistics in html format
 -sample
 	Output one sample query per each query pattern to be able to use it
 	with EXPLAIN query to analyze its performance
@@ -514,7 +517,7 @@ class myprofi
 		if (is_null($slow))
 			return $this->slow;
 
-		$this->slow = $slow;
+		return $this->slow = $slow;
 	}
 
 	/**
@@ -736,6 +739,98 @@ class myprofi
 	}
 }
 
+interface template {
+	public function miniheader();
+	public function minirow($type, $num, $percent);
+	public function minifooter($total);
+
+	public function mainheader();
+	public function mainrow($ornum, $num, $percent, $query, $sort = false, $smpl = false);
+	public function mainfooter($total);
+}
+
+class plain_template implements template
+{
+	public function miniheader()
+	{
+		printf("Queries by type:\n================\n");
+	}
+
+	public function minirow($type, $num, $percent)
+	{
+		printf("% -20s % -10s [%5s%%] \n", $type, number_format($num, 0, '', ' '), number_format($percent, 2));
+	}
+	public function minifooter($total)
+	{
+		printf("---------------\nTotal: %s queries\n\n\n", number_format($total, 0, '', ' '));
+	}
+
+	public function mainheader()
+	{
+		printf("Queries by pattern:\n===================\n");
+	}
+
+	public function mainrow($ornum, $num, $percent, $query, $sort = false, $smpl = false)
+	{
+		if ($sort)
+			printf("%d.\t% -10s [%10s] - %s\n", $ornum, number_format($num, 0, '', ' '), number_format($percent, 2), $query);
+		else
+			printf("%d.\t% -10s [% 5s%%] - %s\n", $ornum, number_format($num, 0, '', ' '), number_format($percent, 2), $query);
+
+		if ($smpl)
+				printf("%s\n\n", $smpl);
+	}
+
+	public function mainfooter($total)
+	{
+		printf("---------------\nTotal: %s patterns", number_format($total, 0, '', ' '));
+	}
+}
+
+class html_template implements template
+{
+	public function miniheader()
+	{
+		printf('<html><head><title>MyProfi Report</title>
+<style type="text/css">
+	* { font-size: 10px; font-family: Verdana }
+	thead * {font-weight:bold}
+</style></head><body>');
+		printf('<table border="1"><thead><tr><td colspan="3">Queries by type:</td></tr></thead><tbody>');
+	}
+
+	public function minirow($type, $num, $percent)
+	{
+		printf("<tr><td>%s</td><td>%s</td><td>%s%%</td></tr>", htmlspecialchars($type), number_format($num, 0, '', ' '), number_format($percent, 2));
+	}
+	public function minifooter($total)
+	{
+		printf('</tbody><tfoot><tr><td colspan="4">Total: %s queries</td></tr></tfoot></table>', number_format($total, 0, '', ' '));
+	}
+
+	public function mainheader()
+	{
+		printf('<table border="1"><thead><tr><td colspan="4">Queries by pattern:</td></tr>');
+		printf('<tr><td>#</td><td>Qty</td><td>%%</td><td>Query</td></tr></thead><tbody>');
+	}
+
+	public function mainrow($ornum, $num, $percent, $query, $sort = false, $smpl = false)
+	{
+		if ($sort)
+			printf('<tr><td>%d</td><td>%s</td><td>%s</td><td>%s</td></tr>', $ornum, $num, $percent, htmlspecialchars($query));
+		else
+			printf('<tr><td>%d</td><td>%s</td><td>%s%%</td><td>%s</td></tr>', $ornum, $num, $percent, htmlspecialchars($query));
+
+		if ($smpl)
+			printf('<tr><td colspan="4"><textarea style="width:100%%" onClick="javascript:this.focus();this.select();">%s</textarea></td></tr>', htmlspecialchars($smpl));
+	}
+
+	public function mainfooter($total)
+	{
+		printf('</tbody><tfoot><tr><td colspan="4">Total: %s patterns</td></tr></tfoot></table></body></html>', number_format($total, 0, '', ' '));
+	}
+}
+
 // for debug purposes
 if (!isset($argv))
 {
@@ -783,6 +878,8 @@ $sample = false;
 
 $sort = false;
 
+$html = false;
+
 // iterating through command line options
 while(null !== ($com = array_shift($argv)))
 {
@@ -806,6 +903,10 @@ while(null !== ($com = array_shift($argv)))
 		case '-sample':
 			$myprofi->sample(true);
 			$sample = true;
+			break;
+
+		case '-html':
+			$html = true;
 			break;
 
 		case '-csv':
@@ -836,28 +937,33 @@ $myprofi->process_queries();
 
 $i = $myprofi->total();
 $j = 1;
-printf("Queries by type:\n================\n");
+
+$tmpl = ($html ? new html_template() : new plain_template());
+
+$tmpl->miniheader();
+
 foreach($myprofi->get_types_stat() as $type => $num)
 {
-	printf("% -20s % -10s [%5s%%] \n", $type, number_format($num, 0, '', ' '), number_format(100*$num/$i,2));
+	$tmpl->minirow($type, $num, 100*$num/$i);
 }
-printf("---------------\nTotal: ".number_format($i, 0, '', ' ')." queries\n\n\n");
-printf("Queries by pattern:\n===================\n");
+
+$tmpl->minifooter($i);
+
+$tmpl->mainheader();
 
 while(list($num, $query, $smpl, $stats) = $myprofi->get_pattern_stats())
 {
 	if ($sort)
 	{
 		$n = $stats[$sort];
-		printf("%d.\t% -10s [%10s] - %s\n", $j, number_format($num, 0, '', ' '), number_format($n, 2), $query);
+		$tmpl->mainrow($j, $num, $n, $query, true, $smpl);
 	}
 	else
 	{
-		printf("%d.\t% -10s [% 5s%%] - %s\n", $j, number_format($num, 0, '', ' '), number_format(100*$num/$i,2), $query);
+		$tmpl->mainrow($j, $num, 100*$num/$i, $query, false, $smpl);
 	}
-	if ($smpl) printf("%s\n\n", $smpl);
 
 	$j++;
 }
-printf("---------------\nTotal: ".number_format(--$j, 0, '', ' ')." patterns");
-?>
+
+$tmpl->mainfooter(--$j);
