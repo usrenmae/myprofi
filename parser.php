@@ -33,7 +33,7 @@ function normalize($q)
 {
 	$query = $q;
 	$query = preg_replace("/\\/\\*.*\\*\\//sU", '', $query);                       // remove multiline comments
-	$query = preg_replace("/([\"'])(?:\\\\.|\\1\\1|.)*\\1/sU", "{}", $query);      // remove quoted strings
+	$query = preg_replace("/([\"'])(?:\\\\.|\"\"|''|.)*\\1/sU", "{}", $query);      // remove quoted strings
 	$query = preg_replace("/(\\W)(?:-?\\d+(?:\\.\\d+)?)/", "\\1{}", $query);       // remove numbers
 	$query = preg_replace("/(\\W)null(?:\\Wnull)*(\\W|\$)/i", "\\1{}\\2", $query); // remove nulls
 	$query = str_replace (array("\\n", "\\t", "\\0"), ' ', $query);                // replace escaped linebreaks
@@ -75,10 +75,10 @@ Options:
 	Note, that if the input file extension is .csv, it is also considered as csv
 -slow
 	Treats an input file as a slow query log
--sort CRITERIA
-	Sort output statistics by given CRITERIA.
+-sort <CRITERIA>
+	Sort output statistics by given <CRITERIA>.
 	Works only for slow query log format.
-	Possible values of CRITERIA: qt_total | qt_avg | qt_max | lt_total | lt_avg | lt_max | rs_total
+	Possible values of <CRITERIA>: qt_total | qt_avg | qt_max | lt_total | lt_avg | lt_max | rs_total
 	 rs_avg | rs_max | re_total | re_avg | re_max,
 	 where two-letter prefix stands for "Query time", "Lock time", "Rows sent", "Rows executed"
 	 values taken from data provided by sloq query log respectively.
