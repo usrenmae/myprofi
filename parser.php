@@ -297,7 +297,7 @@ class slow_extractor extends filereader implements query_fetcher
 
 			// floating point numbers matching is needed for
 			// www.mysqlperformanceblog.com slow query patch
-			preg_match('/Query_time: +(\\d*(?:\\.d+)?) +Lock_time: +(\\d*(?:\\.d+)?) +Rows_sent: +(\\d*(?:\\.d+)?) +Rows_examined: +(\\d*(?:\\.d+)?)/', $line, $matches);
+			preg_match('/Query_time: +(\\d*(?:\\.\\d+)?) +Lock_time: +(\\d*(?:\\.d+)?) +Rows_sent: +(\\d*?) +Rows_examined: +(\\d*?)/', $line, $matches);
 
 			// shift the whole matched string element
 			// leaving only numbers we need
