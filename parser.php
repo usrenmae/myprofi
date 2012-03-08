@@ -33,17 +33,17 @@ ini_set('display_errors', true);
 function normalize ($q)
 {
     $query = $q;
-    $query = preg_replace("/\\/\\*.*\\*\\//sU", '', $query); // remove multiline comments
-    $query = preg_replace("/([\"'])(?:\\\\.|\"\"|''|.)*\\1/sU", "{}", $query); // remove quoted strings
-    $query = preg_replace("/(\\W)(?:-?\\d+(?:\\.\\d+)?)/", "\\1{}", $query); // remove numbers
+    $query = preg_replace("/\\/\\*.*\\*\\//sU", '', $query);                       // remove multiline comments
+    $query = preg_replace("/([\"'])(?:\\\\.|\"\"|''|.)*\\1/sU", "{}", $query);     // remove quoted strings
+    $query = preg_replace("/(\\W)(?:-?\\d+(?:\\.\\d+)?)/", "\\1{}", $query);       // remove numbers
     $query = preg_replace("/(\\W)null(?:\\Wnull)*(\\W|\$)/i", "\\1{}\\2", $query); // remove nulls
-    $query = str_replace(array("\\n", "\\t", "\\0"), ' ', $query); // replace escaped linebreaks
-    $query = preg_replace("/\\s+/", ' ', $query); // remove multiple spaces
-    $query = preg_replace("/ (\\W)/", "\\1", $query); // remove spaces bordering with non-characters
-    $query = preg_replace("/(\\W) /", "\\1", $query); // --,--
-    $query = preg_replace("/\\{\\}(?:,?\\{\\})+/", "{}", $query); // repetitive {},{} to single {}
-    $query = preg_replace("/\\(\\{\\}\\)(?:,\\(\\{\\}\\))+/", "({})", $query); // repetitive ({}),({}) to single ({})
-    $query = strtolower(trim($query, " \t\n)(")); // trim spaces and strtolower
+    $query = str_replace(array("\\n", "\\t", "\\0"), ' ', $query);                 // replace escaped linebreaks
+    $query = preg_replace("/\\s+/", ' ', $query);                                  // remove multiple spaces
+    $query = preg_replace("/ (\\W)/", "\\1", $query);                              // remove spaces bordering with non-characters
+    $query = preg_replace("/(\\W) /", "\\1", $query);                              // --,--
+    $query = preg_replace("/\\{\\}(?:,?\\{\\})+/", "{}", $query);                  // repetitive {},{} to single {}
+    $query = preg_replace("/\\(\\{\\}\\)(?:,\\(\\{\\}\\))+/", "({})", $query);     // repetitive ({}),({}) to single ({})
+    $query = strtolower(trim($query, " \t\n)("));                                  // trim spaces and strtolower
     return $query;
 }
 
@@ -174,7 +174,7 @@ class extractor extends filereader implements query_fetcher
             }
 
             $matches = array();
-            if (preg_match("/^(?:\\d{6} {1,2}\\d{1,2}:\\d{2}:\\d{2}|\t)\t +\\d+ (\\w+)/", $line, $matches)) {
+            if (preg_match("/^(?:\\d{6} {1,2}\\d{1,2}:\\d{2}:\\d{2}|\t)\\s+\\d+\\s+(\\w+)/", $line, $matches)) {
                 // if log line
                 $type = $matches[1];
                 switch ($type)
